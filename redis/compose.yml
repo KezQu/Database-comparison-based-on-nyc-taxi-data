@@ -1,0 +1,5 @@
+services:
+  db:
+    image: redis:8.0-alpine
+    ports:
+      - "6379:6379"

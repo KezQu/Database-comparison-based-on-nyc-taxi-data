@@ -1,0 +1,6 @@
+test.py
+.env
+.parquet
+__pycache__/
+*.pyc
+.vscode/
