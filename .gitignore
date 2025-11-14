@@ -1,6 +1,6 @@
 test.py
 .env
-.parquet
+*.parquet
 __pycache__/
 *.pyc
 .vscode/
