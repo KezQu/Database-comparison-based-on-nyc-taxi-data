@@ -1,47 +1,10 @@
 import argparse
-import enum
 import os
 import subprocess
 
-import pandas as pd
+import pytest
 
-from src.abstract_database import AbstractDatabase
-from src.postgres_database import PostgresDatabase
-from src.redis_database import RedisDatabase
-
-
-class DatabaseType(enum.StrEnum):
-    POSTGRES = enum.auto()
-    REDIS = enum.auto()
-
-
-def SetupDatabase(db_type: DatabaseType) -> AbstractDatabase:
-    match db_type:
-        case DatabaseType.POSTGRES:
-            database_handle = PostgresDatabase()
-        case DatabaseType.REDIS:
-            database_handle = RedisDatabase()
-        case _:
-            raise ValueError(f"Unsupported database type: {db_type}")
-
-    docker_compose_file = os.path.join(
-        os.path.dirname(__file__),
-        f"{db_type.value.lower()}",
-        "compose.yml",
-    )
-    subprocess.run(
-        ["docker", "compose", "-f", docker_compose_file, "up", "-d"], check=True
-    )
-
-    return database_handle
-
-
-def LoadDataIntoDatabase(
-    database_handle: AbstractDatabase, data_parquet_path: str
-) -> None:
-    df = pd.read_parquet(data_parquet_path)
-    print(f"Loaded {len(df)} rows from {data_parquet_path}")
-    raise NotImplementedError("WARNING: Loading data not implemented yet.")
+from src.database_fixture_factory import DatabaseFixtureFactory, DatabaseType
 
 
 def main():
@@ -60,11 +23,34 @@ def main():
         required=True,
         help="Path to the parquet file with data to load",
     )
-
+    parser.add_argument(
+        "--teardown-database",
+        action="store_true",
+        help="Teardown the database after tests",
+    )
     args = parser.parse_args()
 
-    database_handle = SetupDatabase(args.database)
-    LoadDataIntoDatabase(database_handle, args.parquet)
+    docker_compose_file = os.path.join(
+        os.path.dirname(__file__),
+        f"{args.database.value.lower()}",
+        "compose.yml",
+    )
+
+    subprocess.run(
+        ["docker", "compose", "-f", docker_compose_file, "up", "-d"], check=True
+    )
+
+    try:
+        DatabaseFixtureFactory.SetDatabaseType(args.database)
+        DatabaseFixtureFactory.SetDatasetPath(args.parquet)
+
+        pytest.main(args=["test/performance_tests.py", "-s"])
+    finally:
+        if args.teardown_database:
+            subprocess.run(
+                ["docker", "compose", "-f", docker_compose_file, "down", "-v"],
+                check=True,
+            )
 
 
 if __name__ == "__main__":

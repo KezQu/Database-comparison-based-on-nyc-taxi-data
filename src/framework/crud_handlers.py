@@ -7,8 +7,9 @@ from redis.commands.search.query import Query
 from sqlalchemy import ColumnElement, Engine
 from sqlalchemy.orm import Session
 
-from models import BaseOrmType
 from redis import Redis
+
+from .models import BaseOrmType
 
 
 class AbstractCRUDHandler(ABC):
@@ -63,6 +64,10 @@ class OrmCRUDHandler(AbstractCRUDHandler, typing.Generic[ORM_TABLE_TYPE]):
     def create(self, orm_entry: ORM_TABLE_TYPE) -> None:
         with self._establish_session() as session:
             session.add(orm_entry)
+
+    def bulk_create(self, orm_entries: list[ORM_TABLE_TYPE]) -> None:
+        with self._establish_session() as session:
+            session.bulk_save_objects(orm_entries)
 
     def read_all(self) -> list[dict[str, typing.Any]]:
         with self._establish_session() as session:

@@ -15,7 +15,6 @@ class FareRate(BaseOrmType):
     rate_code_id: Mapped[int] = mapped_column(
         primary_key=True,
         unique=True,
-        autoincrement=True,
     )
     rate_name: Mapped[str]
 
