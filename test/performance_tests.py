@@ -10,6 +10,7 @@ def LoadDataIntoDatabase() -> None:
     loader_handle = DatabaseFixtureFactory.GetDataLoaderFunction()
 
     df = pd.read_parquet(data_parquet_path)  # type: ignore
+    df = df.head(10000)
     print(f"Loaded {len(df)} rows from {data_parquet_path}")
     loader_handle(DatabaseFixtureFactory.GetDatabaseHandle(), df)
 

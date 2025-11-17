@@ -13,14 +13,15 @@ def InsertRecordIntoDatabase(
     orm_type: typing.Type[ORM_TABLE_TYPE],
     database: AbstractDatabase,
     **kwargs: str,
-) -> None:
+) -> typing.Optional[int]:
     orm_handler = OrmCRUDHandler(database.GetDatabaseHandle(), orm_type)
 
     orm_entry = orm_type(**kwargs)
     try:
-        orm_handler.create(orm_entry)
+        return orm_handler.create(orm_entry)
     except Exception:
         pass
+    return None
 
 
 def MapRateCodeIdToName(rate_code_id: int) -> str:
@@ -51,34 +52,31 @@ def LoadNycTaxiDataToSqlDatabase(
 ) -> None:
     total_rows = len(taxi_data)
     for row_id, row in taxi_data.iterrows():
-        if int(str(row_id)) % int(total_rows // 1000) == 0:
-            print(f"{int(str(row_id)) / total_rows * 100:.2f}% rows processed.")
-
-        InsertRecordIntoDatabase(
+        rate_code_id = InsertRecordIntoDatabase(
             models.FareRate,
             database,
-            rate_code_id=str(int(row["RatecodeID"])),
+            id=str(int(row["RatecodeID"])),
             rate_name=MapRateCodeIdToName(row["RatecodeID"]),
         )
-        InsertRecordIntoDatabase(
+        pickup_id = InsertRecordIntoDatabase(
             models.TaxiMeter,
             database,
             taxi_meter_date=row["tpep_pickup_datetime"].to_pydatetime(),
             taxi_meter_location=row["PULocationID"],
         )
-        InsertRecordIntoDatabase(
+        dropoff_id = InsertRecordIntoDatabase(
             models.TaxiMeter,
             database,
             taxi_meter_date=row["tpep_dropoff_datetime"].to_pydatetime(),
             taxi_meter_location=row["DOLocationID"],
         )
-        InsertRecordIntoDatabase(
+        vendor_id = InsertRecordIntoDatabase(
             models.Vendor,
             database,
-            vendor_id=str(int(row["VendorID"])),
+            id=str(int(row["VendorID"])),
             vendor_name=MapVendorIdToName(row["VendorID"]),
         )
-        InsertRecordIntoDatabase(
+        fees_id = InsertRecordIntoDatabase(
             models.Fees,
             database,
             mta_tax=row["mta_tax"],
@@ -86,27 +84,30 @@ def LoadNycTaxiDataToSqlDatabase(
             airport_fee=row["Airport_fee"],
             cbd_congestion_fee=row["cbd_congestion_fee"],
         )
-        # InsertRecordIntoDatabase(
-        #     models.Trip,
-        #     database,
-        #     distance=row["distance"],
-        #     passenger_count=row["passenger_count"],
-        #     pickup_id=row["pickup_id"],
-        #     dropoff_id=row["dropoff_id"],
-        #     payment_id=row["payment_id"],
-        #     vendor_id=row["vendor_id"],
-        # )
-        # InsertRecordIntoDatabase(
-        #     models.Payment,
-        #     database,
-        #     payment_type=row["payment_type"],
-        #     extra=row["extra"],
-        #     tolls_amount=row["tolls_amount"],
-        #     fare_amount=row["fare_amount"],
-        #     total_amount=row["total_amount"],
-        #     fees_id=row["fees_id"],
-        #     rate_code_id=row["rate_code_id"],
-        # )
+        payment_id = InsertRecordIntoDatabase(
+            models.Payment,
+            database,
+            payment_type=row["payment_type"],
+            extra=row["extra"],
+            tolls_amount=row["tolls_amount"],
+            fare_amount=row["fare_amount"],
+            total_amount=row["total_amount"],
+            fees_id=str(fees_id),
+            rate_code_id=str(rate_code_id),
+        )
+        InsertRecordIntoDatabase(
+            models.Trip,
+            database,
+            distance=row["trip_distance"],
+            passenger_count=row["passenger_count"],
+            pickup_id=str(pickup_id),
+            dropoff_id=str(dropoff_id),
+            payment_id=str(payment_id),
+            vendor_id=str(vendor_id),
+        )
+
+        if int(str(row_id)) % int(total_rows // 1000) == 0:
+            print(f"{int(str(row_id)) / total_rows * 100:.2f}% rows processed.")
 
 
 def LoadNycTaxiDataToRedisDatabase(

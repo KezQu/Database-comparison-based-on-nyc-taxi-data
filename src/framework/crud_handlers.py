@@ -61,9 +61,10 @@ class OrmCRUDHandler(AbstractCRUDHandler, typing.Generic[ORM_TABLE_TYPE]):
             with session.begin():
                 yield session
 
-    def create(self, orm_entry: ORM_TABLE_TYPE) -> None:
+    def create(self, orm_entry: ORM_TABLE_TYPE) -> int:
         with self._establish_session() as session:
             session.add(orm_entry)
+            return orm_entry.id  # type: ignore
 
     def bulk_create(self, orm_entries: list[ORM_TABLE_TYPE]) -> None:
         with self._establish_session() as session:
