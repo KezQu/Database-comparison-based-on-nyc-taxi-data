@@ -4,7 +4,7 @@ import pandas as pd
 
 from .framework import models
 from .framework.abstract_database import AbstractDatabase
-from .framework.crud_handlers import OrmCRUDHandler
+from .framework.crud_handlers import OrmCRUDHandler, RedisCRUDHandler
 
 ORM_TABLE_TYPE = typing.TypeVar("ORM_TABLE_TYPE", bound=models.BaseOrmType)
 
@@ -113,4 +113,17 @@ def LoadNycTaxiDataToSqlDatabase(
 def LoadNycTaxiDataToRedisDatabase(
     database: AbstractDatabase, taxi_data: pd.DataFrame
 ) -> None:
-    raise NotImplementedError("Redis data loader is not implemented yet.")
+    redis_handler = RedisCRUDHandler(database.GetDatabaseHandle())
+    total_rows = len(taxi_data)
+    for row_id, row in taxi_data.iterrows():
+        record_dict = row.to_dict()
+        record_dict["tpep_pickup_datetime"] = str(
+            record_dict["tpep_pickup_datetime"].to_pydatetime()
+        )
+        record_dict["tpep_dropoff_datetime"] = str(
+            record_dict["tpep_dropoff_datetime"].to_pydatetime()
+        )
+        redis_handler.create(str(row_id), record_dict)
+
+        if int(str(row_id)) % int(total_rows // 1000) == 0:
+            print(f"{int(str(row_id)) / total_rows * 100:.2f}% rows processed.")
