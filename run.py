@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import subprocess
 
@@ -28,7 +29,21 @@ def main():
         action="store_true",
         help="Teardown the database after tests",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "FATAL"],
+        default="INFO",
+        help="Set the logging level",
+    )
+    parser.add_argument(
+        "--rounds",
+        type=int,
+        default=5,
+        help="Number of benchmark rounds to run",
+    )
     args = parser.parse_args()
+    logging.basicConfig(level=getattr(logging, args.log_level))
 
     docker_compose_file = os.path.join(
         os.path.dirname(__file__),
@@ -44,7 +59,14 @@ def main():
         DatabaseFixtureFactory.SetDatabaseType(args.database)
         DatabaseFixtureFactory.SetDatasetPath(args.parquet)
 
-        pytest.main(args=["test/performance_tests.py", "-s"])
+        pytest.main(
+            args=[
+                "test/performance_tests.py",
+                "-s",
+                "--benchmark-min-rounds",
+                str(args.rounds),
+            ]
+        )
     finally:
         if args.teardown_database:
             subprocess.run(

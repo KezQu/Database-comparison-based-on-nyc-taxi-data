@@ -16,4 +16,5 @@ class RedisDatabase(AbstractDatabase):
         cls.__RedisDatabaseHandle = Redis(
             host="127.0.0.1", port=6379, decode_responses=True
         )
+
         return cls.__RedisDatabaseHandle

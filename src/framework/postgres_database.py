@@ -1,9 +1,11 @@
+import logging
 import os
+import time
 import typing
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, text
 
 from .abstract_database import AbstractDatabase
 from .models import BaseOrmType
@@ -32,7 +34,24 @@ class PostgresDatabase(AbstractDatabase):
             )
         DATABASE_URL = f"postgresql://{database_username}:{database_password}@127.0.0.1:5432/{database_name}"
 
-        print(DATABASE_URL)
+        logging.debug(DATABASE_URL)
         cls.__database_engine = create_engine(DATABASE_URL)
+        cls.WaitForDatabaseReady()
         BaseOrmType.metadata.create_all(cls.__database_engine)
         return cls.__database_engine
+
+    @classmethod
+    def WaitForDatabaseReady(cls) -> None:
+        engine = cls.GetDatabaseHandle()
+        for attempt in range(10):
+            try:
+                with engine.connect() as connection:
+                    connection.execute(text("SELECT 1"))
+                logging.info("PostgreSQL database is ready.")
+                return
+            except Exception:
+                logging.warning(
+                    f"Waiting for PostgreSQL database to be ready...{attempt + 1}/10"
+                )
+                time.sleep(2)
+        pass

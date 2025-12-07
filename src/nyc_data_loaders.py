@@ -1,3 +1,4 @@
+import logging
 import typing
 
 import pandas as pd
@@ -106,8 +107,10 @@ def LoadNycTaxiDataToSqlDatabase(
             vendor_id=str(vendor_id),
         )
 
-        if int(str(row_id)) % int(total_rows // 1000) == 0:
-            print(f"{int(str(row_id)) / total_rows * 100:.2f}% rows processed.")
+        if int(str(row_id)) % int(total_rows // 10) == 0:
+            logging.debug(
+                f"{int(str(row_id)) / total_rows * 100:.1f}% rows processed."
+            )
 
 
 def LoadNycTaxiDataToRedisDatabase(
@@ -125,5 +128,7 @@ def LoadNycTaxiDataToRedisDatabase(
         )
         redis_handler.create(str(row_id), record_dict)
 
-        if int(str(row_id)) % int(total_rows // 1000) == 0:
-            print(f"{int(str(row_id)) / total_rows * 100:.2f}% rows processed.")
+        if int(str(row_id)) % int(total_rows // 10) == 0:
+            logging.debug(
+                f"{int(str(row_id)) / total_rows * 100:.1f}% rows processed."
+            )

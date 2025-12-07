@@ -39,13 +39,22 @@ class RedisCRUDHandler(AbstractCRUDHandler):
 
     def update(
         self,
-        query: ColumnElement[bool],
+        query: Query,
         values: dict[typing.Any, typing.Any],
     ) -> typing.Optional[int]:
-        raise NotImplementedError
+        query_results = self.read(query)
+        for entry in query_results:
+            for field, value in values.items():
+                entry[field] = value
+            self.db_engine.json().set(entry["id"], Path.root_path(), entry)  # type: ignore
+        return len(query_results)
 
-    def delete(self, query: ColumnElement[bool]) -> None:
-        raise NotImplementedError
+    def delete(self, query: Query) -> None:
+        query_results = self.read(query)
+        if not query_results:
+            raise ValueError("No matching records found to delete.")
+        for entry in query_results:
+            self.db_engine.json().delete(entry["id"])  # type: ignore
 
 
 class OrmCRUDHandler(AbstractCRUDHandler, typing.Generic[ORM_TABLE_TYPE]):
