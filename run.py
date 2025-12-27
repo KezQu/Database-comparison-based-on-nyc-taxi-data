@@ -70,7 +70,14 @@ def main():
     finally:
         if args.teardown_database:
             subprocess.run(
-                ["docker", "compose", "-f", docker_compose_file, "down", "-v"],
+                [
+                    "docker",
+                    "compose",
+                    "-f",
+                    docker_compose_file,
+                    "down",
+                    "-v",
+                ],
                 check=True,
             )
 

@@ -27,6 +27,10 @@ class DatabaseFixtureFactory:
         cls.database_type = db_type
 
     @classmethod
+    def GetDatabaseType(cls) -> DatabaseType:
+        return cls.database_type
+
+    @classmethod
     def SetDatasetPath(cls, dataset_path: str) -> None:
         cls.dataset_path = dataset_path
 
@@ -35,27 +39,33 @@ class DatabaseFixtureFactory:
         return cls.dataset_path
 
     @classmethod
-    def GetDatabaseHandle(cls) -> AbstractDatabase:
+    def ChooseBasedOnDatabaseType(
+        cls,
+        redis_option: typing.Any,
+        postgres_option: typing.Any,
+    ) -> typing.Any:
         match cls.database_type:
             case DatabaseType.POSTGRES:
-                return PostgresDatabase()
+                return postgres_option
             case DatabaseType.REDIS:
-                return RedisDatabase()
+                return redis_option
             case _:
                 raise ValueError(
                     f"Unsupported database type: {cls.database_type}"
                 )
 
     @classmethod
+    def GetDatabaseHandle(cls) -> AbstractDatabase:
+        return cls.ChooseBasedOnDatabaseType(
+            redis_option=RedisDatabase(),
+            postgres_option=PostgresDatabase(),
+        )
+
+    @classmethod
     def GetDataLoaderFunction(
         cls,
     ) -> typing.Callable[[AbstractDatabase, pd.DataFrame], None]:
-        match cls.database_type:
-            case DatabaseType.POSTGRES:
-                return LoadNycTaxiDataToSqlDatabase
-            case DatabaseType.REDIS:
-                return LoadNycTaxiDataToRedisDatabase
-            case _:
-                raise ValueError(
-                    f"Unsupported database type: {cls.database_type}"
-                )
+        return cls.ChooseBasedOnDatabaseType(
+            redis_option=LoadNycTaxiDataToRedisDatabase,
+            postgres_option=LoadNycTaxiDataToSqlDatabase,
+        )

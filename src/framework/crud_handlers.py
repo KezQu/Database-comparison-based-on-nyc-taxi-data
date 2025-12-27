@@ -1,11 +1,13 @@
 import contextlib
+import logging
 import typing
 from abc import ABC
 
 from redis.commands.json.path import Path
 from redis.commands.search.query import Query
-from sqlalchemy import ColumnElement, Engine
+from sqlalchemy import Delete, Engine, Update, insert
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.selectable import TypedReturnsRows
 
 from redis import Redis
 
@@ -26,43 +28,38 @@ class RedisCRUDHandler(AbstractCRUDHandler):
     def create(self, entry_id: str, entry: dict[str, typing.Any]) -> None:
         self.db_engine.json().set(entry_id, Path.root_path(), entry)
 
-    def read_all(self) -> list[dict[str, typing.Any]]:
-        all_data: list[dict[str, typing.Any]] = []
-        for key in self.db_engine.scan_iter():  # type: ignore
-            value = self.db_engine.json().get(key)  # type: ignore
-            all_data.append({key: value})
-        return all_data
-
-    def read(self, query: Query) -> list[dict[str, typing.Any]]:
-        result = self.db_engine.ft().search(query).docs  # type: ignore
+    def read(
+        self, indexed_query: tuple[str, Query]
+    ) -> list[dict[str, typing.Any]]:
+        index_name, query = indexed_query
+        logging.debug(f"Executing Redis query: {query.query_string()}")
+        result = self.db_engine.ft(index_name).search(query).docs  # type: ignore
+        logging.debug(f"Redis read query result: {result}")
         return result  # type: ignore
 
     def update(
         self,
-        query: Query,
+        indexed_query: tuple[str, Query],
         values: dict[typing.Any, typing.Any],
     ) -> typing.Optional[int]:
-        query_results = self.read(query)
+        query_results = self.read(indexed_query)
         for entry in query_results:
             for field, value in values.items():
                 entry[field] = value
             self.db_engine.json().set(entry["id"], Path.root_path(), entry)  # type: ignore
         return len(query_results)
 
-    def delete(self, query: Query) -> None:
-        query_results = self.read(query)
+    def delete(self, indexed_query: tuple[str, Query]) -> None:
+        query_results = self.read(indexed_query)
         if not query_results:
             raise ValueError("No matching records found to delete.")
         for entry in query_results:
             self.db_engine.json().delete(entry["id"])  # type: ignore
 
 
-class OrmCRUDHandler(AbstractCRUDHandler, typing.Generic[ORM_TABLE_TYPE]):
-    def __init__(
-        self, db_engine: Engine, orm_type: typing.Type[ORM_TABLE_TYPE]
-    ):
+class OrmCRUDHandler(AbstractCRUDHandler):
+    def __init__(self, db_engine: Engine):
         self.db_engine = db_engine
-        self.orm_type = orm_type
 
     @contextlib.contextmanager
     def _establish_session(self):
@@ -70,42 +67,47 @@ class OrmCRUDHandler(AbstractCRUDHandler, typing.Generic[ORM_TABLE_TYPE]):
             with session.begin():
                 yield session
 
-    def create(self, orm_entry: ORM_TABLE_TYPE) -> int:
+    def create(
+        self,
+        orm_type: typing.Type[ORM_TABLE_TYPE],
+        **orm_fields: str,
+    ) -> int:
+        logging.debug(
+            f"Creating ORM entry of type {orm_type.__name__} with fields {orm_fields}"
+        )
         with self._establish_session() as session:
-            session.add(orm_entry)
-            return orm_entry.id  # type: ignore
+            result = session.execute(insert(orm_type).values(**orm_fields))
+        logging.debug(
+            f"Create ORM {orm_type.__name__} with ID: {result.inserted_primary_key[0]}"
+        )
+        return result.inserted_primary_key[0]  # type: ignore
 
-    def bulk_create(self, orm_entries: list[ORM_TABLE_TYPE]) -> None:
+    def bulk_create(self, orm_entries: list[BaseOrmType]) -> None:
         with self._establish_session() as session:
             session.bulk_save_objects(orm_entries)
 
-    def read_all(self) -> list[dict[str, typing.Any]]:
+    def read(
+        self, query: TypedReturnsRows[typing.Tuple[ORM_TABLE_TYPE]]
+    ) -> list[dict[str, typing.Any]]:
+        logging.debug(f"Executing ORM read query: {query}")
         with self._establish_session() as session:
-            found_entries = session.query(self.orm_type).all()
-            converted_entries = [entry.to_dict() for entry in found_entries]
-        return converted_entries
-
-    def read(self, query: ColumnElement[bool]) -> list[dict[str, typing.Any]]:
-        with self._establish_session() as session:
-            found_entries = session.query(self.orm_type).filter(query).all()
+            found_entries = session.scalars(query).all()
+            logging.debug(f"ORM read query result: {found_entries}")
             converted_entries = [entry.to_dict() for entry in found_entries]
         return converted_entries
 
     def update(
         self,
-        query: ColumnElement[bool],
+        query: Update,
         values: dict[typing.Any, typing.Any],
     ) -> typing.Optional[int]:
         entries_updated = None
         with self._establish_session() as session:
-            entries_updated = (
-                session.query(self.orm_type).filter(query).update(values)
-            )
-        return entries_updated
+            entries_updated = session.scalars(query.values(**values)).all()
+        return len(entries_updated)
 
-    def delete(self, query: ColumnElement[bool]) -> None:
+    def delete(self, query: Delete) -> None:
         with self._establish_session() as session:
-            found_entries_query = session.query(self.orm_type).filter(query)
+            found_entries_query = session.scalars(query)
             if not len(found_entries_query.all()):
                 raise ValueError("No matching records found to delete.")
-            found_entries_query.delete()

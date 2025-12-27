@@ -15,7 +15,7 @@ class PostgresDatabase(AbstractDatabase):
     __database_engine: typing.Optional[Engine] = None
 
     @classmethod
-    def GetDatabaseHandle(cls) -> typing.Any:
+    def GetDatabaseEngine(cls) -> typing.Any:
         if cls.__database_engine:
             return cls.__database_engine
 
@@ -36,13 +36,13 @@ class PostgresDatabase(AbstractDatabase):
 
         logging.debug(DATABASE_URL)
         cls.__database_engine = create_engine(DATABASE_URL)
-        cls.WaitForDatabaseReady()
+        cls.__WaitForDatabaseReady()
         BaseOrmType.metadata.create_all(cls.__database_engine)
         return cls.__database_engine
 
     @classmethod
-    def WaitForDatabaseReady(cls) -> None:
-        engine = cls.GetDatabaseHandle()
+    def __WaitForDatabaseReady(cls) -> None:
+        engine = cls.GetDatabaseEngine()
         for attempt in range(10):
             try:
                 with engine.connect() as connection:
@@ -53,5 +53,5 @@ class PostgresDatabase(AbstractDatabase):
                 logging.warning(
                     f"Waiting for PostgreSQL database to be ready...{attempt + 1}/10"
                 )
-                time.sleep(2)
+                time.sleep(1)
         pass

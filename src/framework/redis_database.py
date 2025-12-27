@@ -9,7 +9,7 @@ class RedisDatabase(AbstractDatabase):
     __RedisDatabaseHandle: typing.Optional[Redis] = None
 
     @classmethod
-    def GetDatabaseHandle(cls) -> Redis:
+    def GetDatabaseEngine(cls) -> Redis:
         if cls.__RedisDatabaseHandle:
             return cls.__RedisDatabaseHandle
 

@@ -2,6 +2,8 @@ import logging
 import typing
 
 import pandas as pd
+from redis.commands.search.field import Field, NumericField, TextField
+from redis.commands.search.index_definition import IndexDefinition, IndexType
 
 from .framework import models
 from .framework.abstract_database import AbstractDatabase
@@ -15,11 +17,10 @@ def InsertRecordIntoDatabase(
     database: AbstractDatabase,
     **kwargs: str,
 ) -> typing.Optional[int]:
-    orm_handler = OrmCRUDHandler(database.GetDatabaseHandle(), orm_type)
+    orm_handler = OrmCRUDHandler(database.GetDatabaseEngine())
 
-    orm_entry = orm_type(**kwargs)
     try:
-        return orm_handler.create(orm_entry)
+        return orm_handler.create(orm_type, **kwargs)
     except Exception:
         pass
     return None
@@ -48,12 +49,16 @@ def MapVendorIdToName(vendor_id: int) -> str:
     return vendor_mapping[vendor_id]
 
 
+def CalcPercentage(current: int, total: int) -> float:
+    return (current / total) * 100.0 if total > 0 else 0.0
+
+
 def LoadNycTaxiDataToSqlDatabase(
     database: AbstractDatabase, taxi_data: pd.DataFrame
 ) -> None:
     total_rows = len(taxi_data)
     for row_id, row in taxi_data.iterrows():
-        rate_code_id = InsertRecordIntoDatabase(
+        InsertRecordIntoDatabase(
             models.FareRate,
             database,
             id=str(int(row["RatecodeID"])),
@@ -71,7 +76,7 @@ def LoadNycTaxiDataToSqlDatabase(
             taxi_meter_date=row["tpep_dropoff_datetime"].to_pydatetime(),
             taxi_meter_location=row["DOLocationID"],
         )
-        vendor_id = InsertRecordIntoDatabase(
+        InsertRecordIntoDatabase(
             models.Vendor,
             database,
             id=str(int(row["VendorID"])),
@@ -94,7 +99,7 @@ def LoadNycTaxiDataToSqlDatabase(
             fare_amount=row["fare_amount"],
             total_amount=row["total_amount"],
             fees_id=str(fees_id),
-            rate_code_id=str(rate_code_id),
+            rate_code_id=str(int(row["RatecodeID"])),
         )
         InsertRecordIntoDatabase(
             models.Trip,
@@ -104,31 +109,64 @@ def LoadNycTaxiDataToSqlDatabase(
             pickup_id=str(pickup_id),
             dropoff_id=str(dropoff_id),
             payment_id=str(payment_id),
-            vendor_id=str(vendor_id),
+            vendor_id=str(int(row["VendorID"])),
         )
+        percentage = CalcPercentage(int(str(row_id)) + 1, total_rows)
+        if percentage % 10 == 0:
+            logging.info(f"Processed {percentage:.1f}% of rows")
 
-        if int(str(row_id)) % int(total_rows // 10) == 0:
-            logging.debug(
-                f"{int(str(row_id)) / total_rows * 100:.1f}% rows processed."
-            )
+
+def CreateNycTaxiRedisSchema(
+    database: AbstractDatabase, index_name: str
+) -> None:
+    schema: list[Field] = [
+        NumericField("$.VendorID", as_name="VendorID"),
+        TextField("$.tpep_pickup_datetime", as_name="pickup_time"),
+        TextField("$.tpep_dropoff_datetime", as_name="dropoff_time"),
+        NumericField("$.passenger_count", as_name="passenger_count"),
+        NumericField("$.trip_distance", as_name="trip_distance"),
+        NumericField("$.RatecodeID", as_name="RatecodeID"),
+        NumericField("$.PULocationID", as_name="PULocationID"),
+        NumericField("$.DOLocationID", as_name="DOLocationID"),
+        NumericField("$.payment_type", as_name="payment_type"),
+        NumericField("$.fare_amount", as_name="fare_amount"),
+        NumericField("$.extra", as_name="extra"),
+        NumericField("$.mta_tax", as_name="mta_tax"),
+        NumericField("$.tip_amount", as_name="tip_amount"),
+        NumericField("$.tolls_amount", as_name="tolls_amount"),
+        NumericField(
+            "$.improvement_surcharge", as_name="improvement_surcharge"
+        ),
+        NumericField("$.total_amount", as_name="total_amount"),
+        NumericField("$.congestion_surcharge", as_name="congestion_surcharge"),
+        NumericField("$.Airport_fee", as_name="airport_fee"),
+        NumericField("$.cbd_congestion_fee", as_name="cbd_congestion_fee"),
+    ]
+    database.GetDatabaseEngine().ft(index_name).create_index(
+        schema,
+        definition=IndexDefinition(prefix=["trip:"], index_type=IndexType.JSON),
+    )
 
 
 def LoadNycTaxiDataToRedisDatabase(
     database: AbstractDatabase, taxi_data: pd.DataFrame
 ) -> None:
-    redis_handler = RedisCRUDHandler(database.GetDatabaseHandle())
+    CreateNycTaxiRedisSchema(database=database, index_name="idx:trip")
+
+    redis_handler = RedisCRUDHandler(database.GetDatabaseEngine())
     total_rows = len(taxi_data)
     for row_id, row in taxi_data.iterrows():
         record_dict = row.to_dict()
+        record_dict.pop("store_and_fwd_flag")
         record_dict["tpep_pickup_datetime"] = str(
             record_dict["tpep_pickup_datetime"].to_pydatetime()
         )
         record_dict["tpep_dropoff_datetime"] = str(
             record_dict["tpep_dropoff_datetime"].to_pydatetime()
         )
-        redis_handler.create(str(row_id), record_dict)
 
-        if int(str(row_id)) % int(total_rows // 10) == 0:
-            logging.debug(
-                f"{int(str(row_id)) / total_rows * 100:.1f}% rows processed."
-            )
+        redis_handler.create(f"trip:{str(row_id)}", record_dict)
+
+        percentage = CalcPercentage(int(str(row_id)) + 1, total_rows)
+        if percentage % 10 == 0:
+            logging.info(f"Processed {percentage:.1f}% of rows")

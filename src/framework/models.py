@@ -20,7 +20,7 @@ class FareRate(BaseOrmType):
     rate_name: Mapped[str]
 
     def __repr__(self) -> str:
-        return f"FareRate(id={self.id}, rate_name={self.rate_name})"
+        return f"FareRate({self.to_dict()})"
 
     def to_dict(self) -> dict[str, typing.Any]:
         return {
@@ -41,11 +41,7 @@ class TaxiMeter(BaseOrmType):
     taxi_meter_location: Mapped[str]
 
     def __repr__(self) -> str:
-        return (
-            f"TaxiMeter(id={self.id}, "
-            + f"taxi_meter_date={self.taxi_meter_date}, "
-            + f"taxi_meter_location={self.taxi_meter_location})"
-        )
+        return f"TaxiMeter({self.to_dict()})"
 
     def to_dict(self) -> dict[str, typing.Any]:
         return {
@@ -66,7 +62,7 @@ class Vendor(BaseOrmType):
     vendor_name: Mapped[str]
 
     def __repr__(self) -> str:
-        return f"Vendor(id={self.id}, " + f"vendor_name={self.vendor_name})"
+        return f"Vendor({self.to_dict()})"
 
     def to_dict(self) -> dict[str, typing.Any]:
         return {
@@ -89,13 +85,7 @@ class Fees(BaseOrmType):
     cbd_congestion_fee: Mapped[float]
 
     def __repr__(self) -> str:
-        return (
-            f"Fees(id={self.id}, "
-            + f"mta_tax={self.mta_tax}, "
-            + f"improvement_surcharge={self.improvement_surcharge}, "
-            + f"airport_fee={self.airport_fee}, "
-            + f"cbd_congestion_fee={self.cbd_congestion_fee})"
-        )
+        return f"Fees({self.to_dict()})"
 
     def to_dict(self) -> dict[str, typing.Any]:
         return {
@@ -126,16 +116,7 @@ class Payment(BaseOrmType):
     rate_code: Mapped[FareRate] = relationship("FareRate")
 
     def __repr__(self) -> str:
-        return (
-            f"Payment(id={self.id}, "
-            + f"payment_type={self.payment_type}, "
-            + f"extra={self.extra}, "
-            + f"tolls_amount={self.tolls_amount}, "
-            + f"fare_amount={self.fare_amount}, "
-            + f"total_amount={self.total_amount}, "
-            + f"fees_id={self.fees_id}, "
-            + f"rate_code_id={self.rate_code_id})"
-        )
+        return f"Payment({self.to_dict()})"
 
     def to_dict(self) -> dict[str, typing.Any]:
         return {
@@ -145,8 +126,10 @@ class Payment(BaseOrmType):
             "tolls_amount": self.tolls_amount,
             "fare_amount": self.fare_amount,
             "total_amount": self.total_amount,
-            "fees_id": self.fees_id,
-            "rate_code_id": self.rate_code_id,
+            "fees": self.fees.to_dict() if self.fees else self.fees_id,
+            "rate_code": self.rate_code.to_dict()
+            if self.rate_code
+            else self.rate_code_id,
         }
 
 
@@ -174,23 +157,19 @@ class Trip(BaseOrmType):
     vendor: Mapped[Vendor] = relationship("Vendor")
 
     def __repr__(self) -> str:
-        return (
-            f"Trip(id={self.id}, "
-            + f"distance={self.distance}, "
-            + f"passenger_count={self.passenger_count}, "
-            + f"pickup_id={self.pickup_id}, "
-            + f"dropoff_id={self.dropoff_id}, "
-            + f"payment_id={self.payment_id}, "
-            + f"vendor_id={self.vendor_id})"
-        )
+        return f"Trip({self.to_dict()})"
 
     def to_dict(self) -> dict[str, typing.Any]:
         return {
             "id": self.id,
             "distance": self.distance,
             "passenger_count": self.passenger_count,
-            "pickup_id": self.pickup_id,
-            "dropoff_id": self.dropoff_id,
-            "payment_id": self.payment_id,
-            "vendor_id": self.vendor_id,
+            "pickup": self.pickup.to_dict() if self.pickup else self.pickup_id,
+            "dropoff": self.dropoff.to_dict()
+            if self.dropoff
+            else self.dropoff_id,
+            "payment": self.payment.to_dict()
+            if self.payment
+            else self.payment_id,
+            "vendor": self.vendor.to_dict() if self.vendor else self.vendor_id,
         }
