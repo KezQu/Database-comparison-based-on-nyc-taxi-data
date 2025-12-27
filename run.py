@@ -1,7 +1,5 @@
 import argparse
 import logging
-import os
-import subprocess
 
 import pytest
 
@@ -25,11 +23,6 @@ def main():
         help="Path to the parquet file with data to load",
     )
     parser.add_argument(
-        "--teardown-database",
-        action="store_true",
-        help="Teardown the database after tests",
-    )
-    parser.add_argument(
         "--log-level",
         type=str,
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "FATAL"],
@@ -45,16 +38,6 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=getattr(logging, args.log_level))
 
-    docker_compose_file = os.path.join(
-        os.path.dirname(__file__),
-        f"{args.database.value.lower()}",
-        "compose.yml",
-    )
-
-    subprocess.run(
-        ["docker", "compose", "-f", docker_compose_file, "up", "-d"], check=True
-    )
-
     try:
         DatabaseFixtureFactory.SetDatabaseType(args.database)
         DatabaseFixtureFactory.SetDatasetPath(args.parquet)
@@ -67,19 +50,9 @@ def main():
                 str(args.rounds),
             ]
         )
-    finally:
-        if args.teardown_database:
-            subprocess.run(
-                [
-                    "docker",
-                    "compose",
-                    "-f",
-                    docker_compose_file,
-                    "down",
-                    "-v",
-                ],
-                check=True,
-            )
+    except Exception:
+        DatabaseFixtureFactory.TeardownDatabase()
+        raise
 
 
 if __name__ == "__main__":

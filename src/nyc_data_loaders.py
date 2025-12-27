@@ -139,7 +139,7 @@ def CreateNycTaxiRedisSchema(
         ),
         NumericField("$.total_amount", as_name="total_amount"),
         NumericField("$.congestion_surcharge", as_name="congestion_surcharge"),
-        NumericField("$.Airport_fee", as_name="airport_fee"),
+        NumericField("$.Airport_fee", as_name="Airport_fee"),
         NumericField("$.cbd_congestion_fee", as_name="cbd_congestion_fee"),
     ]
     database.GetDatabaseEngine().ft(index_name).create_index(
@@ -151,7 +151,11 @@ def CreateNycTaxiRedisSchema(
 def LoadNycTaxiDataToRedisDatabase(
     database: AbstractDatabase, taxi_data: pd.DataFrame
 ) -> None:
-    CreateNycTaxiRedisSchema(database=database, index_name="idx:trip")
+    trip_index = "idx:trip"
+    try:
+        database.GetDatabaseEngine().ft(trip_index).info()
+    except Exception:
+        CreateNycTaxiRedisSchema(database=database, index_name=trip_index)
 
     redis_handler = RedisCRUDHandler(database.GetDatabaseEngine())
     total_rows = len(taxi_data)

@@ -8,5 +8,9 @@ class AbstractDatabase(ABC):
         raise NotImplementedError()
 
     @classmethod
-    def WaitForDatabaseReady(cls) -> None:
+    def FlushDatabase(cls) -> None:
+        raise NotImplementedError()
+
+    @classmethod
+    def Reset(cls) -> None:
         raise NotImplementedError()

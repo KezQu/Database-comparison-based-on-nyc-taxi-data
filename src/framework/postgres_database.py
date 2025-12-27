@@ -6,6 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.orm import Session
 
 from .abstract_database import AbstractDatabase
 from .models import BaseOrmType
@@ -15,7 +16,7 @@ class PostgresDatabase(AbstractDatabase):
     __database_engine: typing.Optional[Engine] = None
 
     @classmethod
-    def GetDatabaseEngine(cls) -> typing.Any:
+    def GetDatabaseEngine(cls) -> Engine:
         if cls.__database_engine:
             return cls.__database_engine
 
@@ -41,13 +42,33 @@ class PostgresDatabase(AbstractDatabase):
         return cls.__database_engine
 
     @classmethod
+    def FlushDatabase(cls) -> None:
+        orm_engine = cls.GetDatabaseEngine()
+        with Session(orm_engine) as session:
+            with session.begin():
+                session.execute(
+                    text(
+                        "TRUNCATE TABLE {} RESTART IDENTITY CASCADE;".format(
+                            ", ".join(
+                                table.name
+                                for table in BaseOrmType.metadata.sorted_tables
+                            )
+                        )
+                    )
+                )
+
+    @classmethod
+    def Reset(cls) -> None:
+        cls.__database_engine = None
+
+    @classmethod
     def __WaitForDatabaseReady(cls) -> None:
-        engine = cls.GetDatabaseEngine()
+        engine = cls.__database_engine
         for attempt in range(10):
             try:
                 with engine.connect() as connection:
                     connection.execute(text("SELECT 1"))
-                logging.info("PostgreSQL database is ready.")
+                logging.debug("PostgreSQL database is ready.")
                 return
             except Exception:
                 logging.warning(

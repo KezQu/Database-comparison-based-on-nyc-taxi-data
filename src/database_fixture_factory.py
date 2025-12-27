@@ -1,4 +1,7 @@
 import enum
+import os
+import subprocess
+import sys
 import typing
 
 import pandas as pd
@@ -21,10 +24,16 @@ class DatabaseType(enum.StrEnum):
 class DatabaseFixtureFactory:
     database_type: DatabaseType = DatabaseType.UNKNOWN
     dataset_path: str = ""
+    docker_compose_file: str = ""
 
     @classmethod
     def SetDatabaseType(cls, db_type: DatabaseType) -> None:
         cls.database_type = db_type
+        cls.docker_compose_file = os.path.join(
+            os.path.dirname(os.path.abspath(sys.argv[0])),
+            f"{cls.database_type.value.lower()}",
+            "compose.yml",
+        )
 
     @classmethod
     def GetDatabaseType(cls) -> DatabaseType:
@@ -37,6 +46,28 @@ class DatabaseFixtureFactory:
     @classmethod
     def GetDatasetPath(cls) -> str:
         return cls.dataset_path
+
+    @classmethod
+    def SetupDatabase(cls) -> None:
+        subprocess.run(
+            ["docker", "compose", "-f", cls.docker_compose_file, "up", "-d"],
+            check=True,
+        )
+
+    @classmethod
+    def TeardownDatabase(cls) -> None:
+        subprocess.run(
+            [
+                "docker",
+                "compose",
+                "-f",
+                cls.docker_compose_file,
+                "down",
+                "-v",
+            ],
+            check=True,
+        )
+        cls.GetDatabaseHandle().Reset()
 
     @classmethod
     def ChooseBasedOnDatabaseType(
