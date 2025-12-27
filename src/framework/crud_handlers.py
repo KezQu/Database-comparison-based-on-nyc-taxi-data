@@ -68,7 +68,7 @@ class RedisCRUDHandler(AbstractCRUDHandler):
     def delete(self, indexed_query: tuple[str, Query]) -> None:
         query_results = self.read(indexed_query)
         if not query_results:
-            raise ValueError("No matching records found to delete.")
+            logging.warning("No matching records found to delete.")
         for entry_id in query_results.keys():
             self.db_engine.json().delete(entry_id)
         logging.info(f"Deleted {len(query_results)} entries.")
@@ -134,6 +134,6 @@ class OrmCRUDHandler(AbstractCRUDHandler):
         with self._establish_session() as session:
             delete_result = session.execute(query)
             if not delete_result.rowcount:
-                raise ValueError("No matching records found to delete.")
+                logging.warning("No matching records found to delete.")
             logging.info(f"Deleted {delete_result.rowcount} entries.")
         return delete_result

@@ -2,7 +2,7 @@ import logging
 import typing
 
 import pandas as pd
-from redis.commands.search.field import Field, NumericField, TextField
+from redis.commands.search.field import Field, NumericField, TagField, TextField
 from redis.commands.search.index_definition import IndexDefinition, IndexType
 
 from .framework import models
@@ -120,12 +120,13 @@ def CreateNycTaxiRedisSchema(
     database: AbstractDatabase, index_name: str
 ) -> None:
     schema: list[Field] = [
-        NumericField("$.VendorID", as_name="VendorID"),
+        TagField("$.vendor_name", as_name="vendor_name"),
         TextField("$.tpep_pickup_datetime", as_name="pickup_time"),
         TextField("$.tpep_dropoff_datetime", as_name="dropoff_time"),
         NumericField("$.passenger_count", as_name="passenger_count"),
         NumericField("$.trip_distance", as_name="trip_distance"),
         NumericField("$.RatecodeID", as_name="RatecodeID"),
+        TagField("$.fare_rate", as_name="fare_rate"),
         NumericField("$.PULocationID", as_name="PULocationID"),
         NumericField("$.DOLocationID", as_name="DOLocationID"),
         NumericField("$.payment_type", as_name="payment_type"),
@@ -161,13 +162,18 @@ def LoadNycTaxiDataToRedisDatabase(
     total_rows = len(taxi_data)
     for row_id, row in taxi_data.iterrows():
         record_dict = row.to_dict()
-        record_dict.pop("store_and_fwd_flag")
+        record_dict["fare_rate"] = MapRateCodeIdToName(
+            record_dict["RatecodeID"]
+        )
+        record_dict["vendor_name"] = MapVendorIdToName(record_dict["VendorID"])
         record_dict["tpep_pickup_datetime"] = str(
             record_dict["tpep_pickup_datetime"].to_pydatetime()
         )
         record_dict["tpep_dropoff_datetime"] = str(
             record_dict["tpep_dropoff_datetime"].to_pydatetime()
         )
+        record_dict.pop("store_and_fwd_flag")
+        record_dict.pop("VendorID")
 
         redis_handler.create(f"trip:{str(row_id)}", record_dict)
 

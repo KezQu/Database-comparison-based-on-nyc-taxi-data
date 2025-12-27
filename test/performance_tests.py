@@ -6,10 +6,13 @@ import pandas as pd
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 from redis.commands.search.query import Query
-from sqlalchemy import and_, delete, update
-from test_queries import SELECT_QUERIES_TEST_LIST
+from sqlalchemy import Delete
+from test_queries import (
+    DELETE_QUERIES_TEST_LIST,
+    SELECT_QUERIES_TEST_LIST,
+    UPDATE_QUERIES_TEST_LIST,
+)
 
-import src.framework.models as models
 from src.database_fixture_factory import DatabaseFixtureFactory
 from src.framework.crud_handlers import (
     AbstractCRUDHandler,
@@ -65,48 +68,41 @@ def test_create_records(
     )
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 @pytest.mark.parametrize(
-    "records_count, query_selector",
+    "records_count, read_selector",
     list(product(RECORDS_COUNTS_TEST_LIST, SELECT_QUERIES_TEST_LIST)),
 )
 def test_read_records_with_filter(
     SetupDatabaseContainer: None,
     benchmark: BenchmarkFixture,
     records_count: int,
-    query_selector: typing.Any,
+    read_selector: typing.Any,
 ) -> None:
     LoadRecordsToDatabase(records_count)
     crud_handler: AbstractCRUDHandler = GetCRUDHandler()
     select_query = DatabaseFixtureFactory.ChooseBasedOnDatabaseType(
-        *query_selector
+        *read_selector
     )
     benchmark(crud_handler.read, select_query)
     print(crud_handler.read(select_query))
 
 
 @pytest.mark.skip
-@pytest.mark.parametrize("records_count", [200])
+@pytest.mark.parametrize(
+    "records_count, update_selector",
+    list(product(RECORDS_COUNTS_TEST_LIST, UPDATE_QUERIES_TEST_LIST)),
+)
 def test_update_all_records(
     SetupDatabaseContainer: None,
     benchmark: BenchmarkFixture,
     records_count: int,
+    update_selector: tuple[typing.Any, typing.Any],
 ) -> None:
     LoadRecordsToDatabase(records_count)
     crud_handler: AbstractCRUDHandler = GetCRUDHandler()
-    update_query = DatabaseFixtureFactory.ChooseBasedOnDatabaseType(
-        ("idx:trip", Query("@RatecodeID:[2 6]")),
-        update(models.Payment).where(
-            and_(
-                models.Payment.rate_code_id >= 2,
-                models.Payment.rate_code_id <= 6,
-            )
-        ),
-    )
-    update_values = dict(
-        DatabaseFixtureFactory.ChooseBasedOnDatabaseType(
-            {"RatecodeID": 1}, {"rate_code_id": 1}
-        )
+    update_query, update_values = (
+        DatabaseFixtureFactory.ChooseBasedOnDatabaseType(*update_selector)
     )
 
     benchmark.pedantic(
@@ -116,16 +112,20 @@ def test_update_all_records(
     )
 
 
-@pytest.mark.skip
-@pytest.mark.parametrize("records_count", [10])
+# @pytest.mark.skip
+@pytest.mark.parametrize(
+    "records_count, delete_selector",
+    list(product(RECORDS_COUNTS_TEST_LIST, DELETE_QUERIES_TEST_LIST)),
+)
 def test_delete_all_trips(
     SetupDatabaseContainer: None,
     benchmark: BenchmarkFixture,
     records_count: int,
+    delete_selector: tuple[tuple[str, Query], Delete],
 ) -> None:
     crud_handler: AbstractCRUDHandler = GetCRUDHandler()
     delete_query = DatabaseFixtureFactory.ChooseBasedOnDatabaseType(
-        ("idx:trip", Query("*")), delete(models.Trip)
+        *delete_selector
     )
     benchmark.pedantic(
         target=crud_handler.delete,
