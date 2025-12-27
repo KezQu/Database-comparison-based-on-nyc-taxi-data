@@ -1,9 +1,11 @@
 import contextlib
+import json
 import logging
 import typing
 from abc import ABC
 
 from redis.commands.json.path import Path
+from redis.commands.search.document import Document
 from redis.commands.search.query import Query
 from sqlalchemy import Delete, Engine, Update, insert
 from sqlalchemy.orm import Session
@@ -33,9 +35,16 @@ class RedisCRUDHandler(AbstractCRUDHandler):
     ) -> list[dict[str, typing.Any]]:
         index_name, query = indexed_query
         logging.debug(f"Executing Redis query: {query.query_string()}")
-        result = self.db_engine.ft(index_name).search(query).docs  # type: ignore
-        logging.debug(f"Redis read query result: {result}")
-        return result  # type: ignore
+        found_entries: list[Document] = (  # type: ignore
+            self.db_engine.ft(index_name).search(query).docs  # type: ignore
+        )
+        dict_entries: list[dict[str, typing.Any]] = []
+        for document in found_entries:  # type: ignore
+            doc_json: dict[str, typing.Any] = json.loads(document.json)  # type: ignore
+            doc_json["id"] = document.id  # type: ignore
+            dict_entries.append(doc_json)
+        logging.debug(f"Redis read query result: {dict_entries}")
+        return dict_entries
 
     def update(
         self,
@@ -46,7 +55,7 @@ class RedisCRUDHandler(AbstractCRUDHandler):
         for entry in query_results:
             for field, value in values.items():
                 entry[field] = value
-            self.db_engine.json().set(entry["id"], Path.root_path(), entry)  # type: ignore
+            self.db_engine.json().set(entry["id"], Path.root_path(), entry)
         return len(query_results)
 
     def delete(self, indexed_query: tuple[str, Query]) -> None:
@@ -54,7 +63,7 @@ class RedisCRUDHandler(AbstractCRUDHandler):
         if not query_results:
             raise ValueError("No matching records found to delete.")
         for entry in query_results:
-            self.db_engine.json().delete(entry["id"])  # type: ignore
+            self.db_engine.json().delete(entry["id"])
 
 
 class OrmCRUDHandler(AbstractCRUDHandler):
@@ -78,7 +87,7 @@ class OrmCRUDHandler(AbstractCRUDHandler):
         with self._establish_session() as session:
             result = session.execute(insert(orm_type).values(**orm_fields))
         logging.debug(
-            f"Create ORM {orm_type.__name__} with ID: {result.inserted_primary_key[0]}"
+            f"Create ORM {orm_type.__name__} with ID: {result.inserted_primary_key[0]}"  # type: ignore
         )
         return result.inserted_primary_key[0]  # type: ignore
 
@@ -92,8 +101,8 @@ class OrmCRUDHandler(AbstractCRUDHandler):
         logging.debug(f"Executing ORM read query: {query}")
         with self._establish_session() as session:
             found_entries = session.scalars(query).all()
-            logging.debug(f"ORM read query result: {found_entries}")
             converted_entries = [entry.to_dict() for entry in found_entries]
+            logging.debug(f"ORM read query result: {converted_entries}")
         return converted_entries
 
     def update(

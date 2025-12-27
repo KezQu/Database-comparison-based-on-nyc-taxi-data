@@ -1,4 +1,5 @@
 import logging
+import typing
 
 import pandas as pd
 import pytest
@@ -38,16 +39,18 @@ def GetCRUDHandler() -> AbstractCRUDHandler:
     )
 
 
-@pytest.mark.skip
 @pytest.mark.parametrize("records_count", [1000, 5000, 10000])
-def test_create_records(benchmark, records_count: int) -> None:
+def test_create_records(
+    benchmark: typing.Callable[..., None], records_count: int
+) -> None:
     benchmark(LoadRecordsToDatabase, records_count)
 
 
-@pytest.mark.parametrize("records_count", [1])
+@pytest.mark.skip
+@pytest.mark.parametrize("records_count", [1000, 5000, 10000])
 def test_read_all_records(
-    GetCRUDHandler,
-    benchmark,
+    GetCRUDHandler: AbstractCRUDHandler,
+    benchmark: typing.Callable[..., None],
     records_count: int,
 ) -> None:
     LoadRecordsToDatabase(records_count)
@@ -55,5 +58,4 @@ def test_read_all_records(
     read_all_query = DatabaseFixtureFactory.ChooseBasedOnDatabaseType(
         ("idx:trip", Query("*")), select(models.Trip)
     )
-    # benchmark(crud_handler.read, read_all_query)
-    print(crud_handler.read(read_all_query))
+    benchmark(crud_handler.read, read_all_query)
