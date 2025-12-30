@@ -75,4 +75,3 @@ class PostgresDatabase(AbstractDatabase):
                     f"Waiting for PostgreSQL database to be ready...{attempt + 1}/10"
                 )
                 time.sleep(1)
-        pass

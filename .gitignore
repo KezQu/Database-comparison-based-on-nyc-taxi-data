@@ -1,6 +1,7 @@
 test.py
 .env
-*.parquet
+data/**
+.benchmarks/**
 __pycache__/
 *.pyc
 .vscode/

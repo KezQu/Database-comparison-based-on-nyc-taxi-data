@@ -51,10 +51,9 @@ def GetCRUDHandler() -> AbstractCRUDHandler:
     )
 
 
-RECORDS_COUNTS_TEST_LIST = [100]
+RECORDS_COUNTS_TEST_LIST = [1000, 5000, 10000, 50000]
 
 
-@pytest.mark.skip
 @pytest.mark.parametrize("records_count", RECORDS_COUNTS_TEST_LIST)
 def test_create_records(
     SetupDatabaseContainer: None,
@@ -65,6 +64,7 @@ def test_create_records(
         target=LoadRecordsToDatabase,
         args=(records_count,),
         teardown=DatabaseFixtureFactory.GetDatabaseHandle().FlushDatabase(),
+        rounds=10,
     )
 
 
@@ -72,6 +72,9 @@ def test_create_records(
 @pytest.mark.parametrize(
     "records_count, read_selector",
     list(product(RECORDS_COUNTS_TEST_LIST, SELECT_QUERIES_TEST_LIST)),
+    ids=lambda val: str(val)
+    if isinstance(val, int)
+    else f"read_query{SELECT_QUERIES_TEST_LIST.index(val)}",
 )
 def test_read_records_with_filter(
     SetupDatabaseContainer: None,
@@ -85,13 +88,15 @@ def test_read_records_with_filter(
         *read_selector
     )
     benchmark(crud_handler.read, select_query)
-    print(crud_handler.read(select_query))
 
 
 @pytest.mark.skip
 @pytest.mark.parametrize(
     "records_count, update_selector",
     list(product(RECORDS_COUNTS_TEST_LIST, UPDATE_QUERIES_TEST_LIST)),
+    ids=lambda val: str(val)
+    if isinstance(val, int)
+    else f"update_query{UPDATE_QUERIES_TEST_LIST.index(val)}",
 )
 def test_update_all_records(
     SetupDatabaseContainer: None,
@@ -108,14 +113,17 @@ def test_update_all_records(
     benchmark.pedantic(
         target=crud_handler.update,
         args=(update_query, update_values),
-        rounds=1,
+        rounds=10,
     )
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 @pytest.mark.parametrize(
     "records_count, delete_selector",
     list(product(RECORDS_COUNTS_TEST_LIST, DELETE_QUERIES_TEST_LIST)),
+    ids=lambda val: str(val)
+    if isinstance(val, int)
+    else f"delete_query{DELETE_QUERIES_TEST_LIST.index(val)}",
 )
 def test_delete_all_trips(
     SetupDatabaseContainer: None,
@@ -131,5 +139,5 @@ def test_delete_all_trips(
         target=crud_handler.delete,
         args=(delete_query,),
         setup=lambda: LoadRecordsToDatabase(records_count),
-        rounds=1,
+        rounds=10,
     )

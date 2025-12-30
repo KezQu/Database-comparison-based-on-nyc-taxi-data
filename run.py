@@ -29,12 +29,6 @@ def main():
         default="INFO",
         help="Set the logging level",
     )
-    parser.add_argument(
-        "--rounds",
-        type=int,
-        default=5,
-        help="Number of benchmark rounds to run",
-    )
     args = parser.parse_args()
     logging.basicConfig(level=getattr(logging, args.log_level))
 
@@ -46,8 +40,9 @@ def main():
             args=[
                 "test/performance_tests.py",
                 "-s",
-                "--benchmark-min-rounds",
-                str(args.rounds),
+                "-vv",
+                "--benchmark-save",
+                f"performance_{args.database.value.lower()}",
             ]
         )
     except Exception:
