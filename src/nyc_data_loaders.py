@@ -22,9 +22,9 @@ def InsertBulkRecordsIntoDatabase(
         filtered_frame.drop_duplicates().to_dict(orient="records")
     )
     logging.debug(orm_entries)
-    orm_handler.bulk_create(
+    orm_handler.create(
         orm_type,
-        orm_entries,
+        *orm_entries,
     )
 
 

@@ -94,9 +94,6 @@ class OrmCRUDHandler(AbstractCRUDHandler):
                 f"Creating {len(orm_entries)} entries of type {orm_type.__name__}."
             )
             session.execute(insert(orm_type), orm_entries)
-        # logging.debug(
-        #     f"Created ORM {orm_type.__name__} with ID: {result.inserted_primary_key[0]} : {orm_fields}"  # type: ignore
-        # )
 
     def read(
         self, query: TypedReturnsRows[typing.Tuple[ORM_TABLE_TYPE]]

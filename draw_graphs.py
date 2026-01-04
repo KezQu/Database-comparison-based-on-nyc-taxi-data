@@ -52,12 +52,14 @@ def plot_all_subplots(op: str, data: dict[str, typing.Any]):
             sizes, operations_per_second, marker="o", label=query_variant
         )
 
+    axs[0].set_xscale("log")
     axs[0].set_xlabel("Number of records")
     axs[0].set_ylabel("Execution time (seconds)")
     axs[0].set_title("Execution Time vs Data Size")
     axs[0].grid(True)
     axs[0].legend()
 
+    axs[1].set_xscale("log")
     axs[1].set_xlabel("Number of records")
     axs[1].set_ylabel("Operations per second (ops/sec)")
     axs[1].set_title("Operations per Second vs Data Size")
