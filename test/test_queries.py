@@ -43,15 +43,6 @@ SELECT_QUERIES_TEST_LIST: list[tuple[tuple[str, Query], typing.Any]] = [
                 models.Trip.passenger_count.in_([1, 2, 3, 5]),
             )
         )
-        .group_by(
-            models.Fees.airport_fee,
-            models.Payment.fare_amount,
-            models.Payment.total_amount,
-            models.Trip.id,
-            models.Trip.distance,
-            models.Fees.id,
-            models.Payment.id,
-        )
         .order_by(models.Payment.total_amount.desc()),
     ),
     (
