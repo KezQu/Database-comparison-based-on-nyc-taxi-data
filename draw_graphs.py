@@ -33,7 +33,7 @@ for test in benchmarks:
     try:
         query_variant = test["param"].split("-")[1]
     except IndexError:
-        query_variant = "no_filter"
+        query_variant = "create"
     data[op].setdefault(query_variant, {})[
         int(test["params"]["records_count"])
     ] = test["stats"]
@@ -47,8 +47,8 @@ def plot_all_subplots(op: str, data: dict[str, typing.Any]):
         sizes = sorted(stats.keys())
         mean_times = [stats[size]["mean"] for size in sizes]
         operations_per_second = [stats[size]["ops"] for size in sizes]
-        axs[0].loglog(sizes, mean_times, marker="o", label=query_variant)
-        axs[1].loglog(
+        axs[0].plot(sizes, mean_times, marker="o", label=query_variant)
+        axs[1].plot(
             sizes, operations_per_second, marker="o", label=query_variant
         )
 
@@ -67,8 +67,5 @@ def plot_all_subplots(op: str, data: dict[str, typing.Any]):
     plt.show()
 
 
-# -------------------------------
-# Generate plots (subplots per operation)
-# -------------------------------
 for operation, values in list(data.items()):
     plot_all_subplots(operation, values)

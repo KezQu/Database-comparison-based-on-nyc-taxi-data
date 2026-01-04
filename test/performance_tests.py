@@ -36,6 +36,15 @@ def LoadRecordsToDatabase(
 
     df = pd.read_parquet(data_parquet_path)  # type: ignore
     df = df.head(records_count)
+    df.rename(
+        columns={
+            "Airport_fee": "airport_fee",
+            "RatecodeID": "rate_code_id",
+            "VendorID": "vendor_id",
+            "trip_distance": "distance",
+        },
+        inplace=True,
+    )
     logging.info(f"Loaded {len(df)} rows from {data_parquet_path}")
     loader_handle(DatabaseFixtureFactory.GetDatabaseHandle(), df)
 
@@ -63,12 +72,11 @@ def test_create_records(
     benchmark.pedantic(
         target=LoadRecordsToDatabase,
         args=(records_count,),
-        teardown=DatabaseFixtureFactory.GetDatabaseHandle().FlushDatabase(),
+        teardown=lambda *_: DatabaseFixtureFactory.GetDatabaseHandle().FlushDatabase(),
         rounds=10,
     )
 
 
-@pytest.mark.skip
 @pytest.mark.parametrize(
     "records_count, read_selector",
     list(product(RECORDS_COUNTS_TEST_LIST, SELECT_QUERIES_TEST_LIST)),
@@ -76,7 +84,7 @@ def test_create_records(
     if isinstance(val, int)
     else f"read_query{SELECT_QUERIES_TEST_LIST.index(val)}",
 )
-def test_read_records_with_filter(
+def test_read_records(
     SetupDatabaseContainer: None,
     benchmark: BenchmarkFixture,
     records_count: int,
@@ -90,7 +98,6 @@ def test_read_records_with_filter(
     benchmark(crud_handler.read, select_query)
 
 
-@pytest.mark.skip
 @pytest.mark.parametrize(
     "records_count, update_selector",
     list(product(RECORDS_COUNTS_TEST_LIST, UPDATE_QUERIES_TEST_LIST)),
@@ -98,13 +105,12 @@ def test_read_records_with_filter(
     if isinstance(val, int)
     else f"update_query{UPDATE_QUERIES_TEST_LIST.index(val)}",
 )
-def test_update_all_records(
+def test_update_records(
     SetupDatabaseContainer: None,
     benchmark: BenchmarkFixture,
     records_count: int,
     update_selector: tuple[typing.Any, typing.Any],
 ) -> None:
-    LoadRecordsToDatabase(records_count)
     crud_handler: AbstractCRUDHandler = GetCRUDHandler()
     update_query, update_values = (
         DatabaseFixtureFactory.ChooseBasedOnDatabaseType(*update_selector)
@@ -113,11 +119,12 @@ def test_update_all_records(
     benchmark.pedantic(
         target=crud_handler.update,
         args=(update_query, update_values),
+        setup=lambda: LoadRecordsToDatabase(records_count),
+        teardown=lambda *_: DatabaseFixtureFactory.GetDatabaseHandle().FlushDatabase(),
         rounds=10,
     )
 
 
-@pytest.mark.skip
 @pytest.mark.parametrize(
     "records_count, delete_selector",
     list(product(RECORDS_COUNTS_TEST_LIST, DELETE_QUERIES_TEST_LIST)),
@@ -125,7 +132,7 @@ def test_update_all_records(
     if isinstance(val, int)
     else f"delete_query{DELETE_QUERIES_TEST_LIST.index(val)}",
 )
-def test_delete_all_trips(
+def test_delete_records(
     SetupDatabaseContainer: None,
     benchmark: BenchmarkFixture,
     records_count: int,
@@ -139,5 +146,6 @@ def test_delete_all_trips(
         target=crud_handler.delete,
         args=(delete_query,),
         setup=lambda: LoadRecordsToDatabase(records_count),
+        teardown=lambda *_: DatabaseFixtureFactory.GetDatabaseHandle().FlushDatabase(),
         rounds=10,
     )
