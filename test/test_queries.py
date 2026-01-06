@@ -14,7 +14,7 @@ SELECT_QUERIES_TEST_LIST: list[tuple[tuple[str, Query], typing.Any]] = [
     (
         (
             "idx:trip",
-            Query("@RatecodeID:[1 1] @trip_distance:[5.00000001 inf]"),
+            Query("@rate_code_id:[1 1] @distance:[5.00000001 inf]"),
         ),
         select(models.Trip)
         .join(models.Trip.payment)
@@ -26,7 +26,7 @@ SELECT_QUERIES_TEST_LIST: list[tuple[tuple[str, Query], typing.Any]] = [
         (
             "idx:trip",
             Query(
-                "@Airport_fee:[0.00000001 inf] @trip_distance:[-inf 1.99999999] "
+                "@airport_fee:[0.00000001 inf] @distance:[-inf 1.99999999] "
                 "@fare_amount:[10.00000001 inf] (@passenger_count:[1 3] | @passenger_count:[5 5])"
             ),
         ),
@@ -43,22 +43,13 @@ SELECT_QUERIES_TEST_LIST: list[tuple[tuple[str, Query], typing.Any]] = [
                 models.Trip.passenger_count.in_([1, 2, 3, 5]),
             )
         )
-        .group_by(
-            models.Fees.airport_fee,
-            models.Payment.fare_amount,
-            models.Payment.total_amount,
-            models.Trip.id,
-            models.Trip.distance,
-            models.Fees.id,
-            models.Payment.id,
-        )
         .order_by(models.Payment.total_amount.desc()),
     ),
     (
         (
             "idx:trip",
             Query(
-                "@vendor_name:{Curb*} @trip_distance:[3 inf] @fare_amount:[20 inf]"
+                "@vendor_name:{Curb*} @distance:[3 inf] @fare_amount:[20 inf]"
             ),
         ),
         select(
@@ -80,21 +71,6 @@ SELECT_QUERIES_TEST_LIST: list[tuple[tuple[str, Query], typing.Any]] = [
         )
         .order_by(models.Fees.airport_fee.desc()),
     ),
-    # (
-    #     (
-    #         "idx:trip",
-    #         Query("@fare_amount:[50 inf]"),
-    #     ),
-    #     select(models.Trip)
-    #     .join(models.Trip.payment)
-    #     .where(
-    #         models.Payment.fare_amount
-    #         > select(models.Payment.fare_amount)
-    #         .select_from(models.Payment)
-    #         .limit(1)
-    #         .scalar_subquery()
-    #     ),
-    # ),
 ]
 
 
@@ -105,7 +81,7 @@ UPDATE_QUERIES_TEST_LIST: list[
     ]
 ] = [
     (
-        (("idx:trip", Query("@RatecodeID:[2 6]")), {"RatecodeID": 1}),
+        (("idx:trip", Query("@rate_code_id:[2 6]")), {"rate_code_id": 1}),
         (
             update(models.Payment).where(
                 and_(
@@ -118,7 +94,7 @@ UPDATE_QUERIES_TEST_LIST: list[
     ),
     (
         (
-            ("idx:trip", Query("@trip_distance:[-inf 4.99999999]")),
+            ("idx:trip", Query("@distance:[-inf 4.99999999]")),
             {"passenger_count": 4},
         ),
         (
@@ -130,9 +106,7 @@ UPDATE_QUERIES_TEST_LIST: list[
         (
             (
                 "idx:trip",
-                Query(
-                    "@trip_distance:[10.00000001 inf] @passenger_count:[1 1]"
-                ),
+                Query("@distance:[10.00000001 inf] @passenger_count:[1 1]"),
             ),
             {"distance": 9.99, "passenger_count": 2},
         ),
@@ -164,7 +138,7 @@ UPDATE_QUERIES_TEST_LIST: list[
         ),
     ),
     (
-        (("idx:trip", Query("@trip_distance:[10.00000001 inf]")), {"extra": 5}),
+        (("idx:trip", Query("@distance:[10.00000001 inf]")), {"extra": 5}),
         (
             update(models.Payment).where(
                 models.Payment.id.in_(
@@ -179,7 +153,7 @@ UPDATE_QUERIES_TEST_LIST: list[
     (
         (
             ("idx:trip", Query("@fare_amount:[-inf 4.99999999]")),
-            {"Airport_fee": 99},
+            {"airport_fee": 99},
         ),
         (
             update(models.Fees).where(
@@ -211,37 +185,31 @@ UPDATE_QUERIES_TEST_LIST: list[
 ]
 
 DELETE_QUERIES_TEST_LIST: list[tuple[tuple[str, Query], Delete]] = [
-    # 1. Delete all trips
     (("idx:trip", Query("*")), delete(models.Trip)),
-    # 2. Delete trips with distance < 2
     (
-        ("idx:trip", Query("@trip_distance:[-inf 1.99999999]")),
+        ("idx:trip", Query("@distance:[-inf 1.99999999]")),
         delete(models.Trip).where(models.Trip.distance < 2),
     ),
-    # 3. Delete payments with fare_amount > 100
     (
         ("idx:trip", Query("@fare_amount:[100.00000001 inf]")),
-        delete(models.Payment).where(models.Payment.fare_amount > 100),
+        delete(models.Trip).where(
+            models.Trip.payment_id.in_(
+                select(models.Payment.id).where(
+                    models.Payment.fare_amount > 100
+                )
+            )
+        ),
     ),
-    # # 4. Delete vendors not referenced by any Trip record
-    # (
-    #     ("idx:trip", Query("*")),
-    #     delete(models.Vendor).where(
-    #         ~models.Vendor.id.in_(select(models.Trip.vendor_id))
-    #     ),
-    # ),
-    # 5. Delete fees where airport_fee = 0 and improvement_surcharge > 1
     (
         (
             "idx:trip",
-            Query("@Airport_fee:[0 0] @improvement_surcharge:[1.00000001 inf]"),
+            Query("@airport_fee:[0 0] @improvement_surcharge:[1.00000001 inf]"),
         ),
         delete(models.Fees).where(
             (models.Fees.airport_fee == 0)
             & (models.Fees.improvement_surcharge > 1)
         ),
     ),
-    # 6. Delete trips where passenger_count is in (2, 3, 5)
     (
         (
             "idx:trip",

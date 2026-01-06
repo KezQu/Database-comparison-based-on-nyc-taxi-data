@@ -19,11 +19,14 @@ def InsertRecordIntoDatabase(
 ) -> typing.Optional[int]:
     orm_handler = OrmCRUDHandler(database.GetDatabaseEngine())
 
+    logging.debug(kwargs)
     try:
-        return orm_handler.create(orm_type, **kwargs)
+        return orm_handler.create(
+            orm_type,
+            kwargs,
+        )[0]
     except Exception:
-        pass
-    return None
+        return None
 
 
 def MapRateCodeIdToName(rate_code_id: int) -> str:
@@ -61,8 +64,8 @@ def LoadNycTaxiDataToSqlDatabase(
         InsertRecordIntoDatabase(
             models.FareRate,
             database,
-            id=str(int(row["RatecodeID"])),
-            rate_name=MapRateCodeIdToName(row["RatecodeID"]),
+            id=str(int(row["rate_code_id"])),
+            rate_name=MapRateCodeIdToName(row["rate_code_id"]),
         )
         pickup_id = InsertRecordIntoDatabase(
             models.TaxiMeter,
@@ -79,15 +82,15 @@ def LoadNycTaxiDataToSqlDatabase(
         InsertRecordIntoDatabase(
             models.Vendor,
             database,
-            id=str(int(row["VendorID"])),
-            vendor_name=MapVendorIdToName(row["VendorID"]),
+            id=str(int(row["vendor_id"])),
+            vendor_name=MapVendorIdToName(row["vendor_id"]),
         )
         fees_id = InsertRecordIntoDatabase(
             models.Fees,
             database,
             mta_tax=row["mta_tax"],
             improvement_surcharge=row["improvement_surcharge"],
-            airport_fee=row["Airport_fee"],
+            airport_fee=row["airport_fee"],
             cbd_congestion_fee=row["cbd_congestion_fee"],
         )
         payment_id = InsertRecordIntoDatabase(
@@ -99,17 +102,17 @@ def LoadNycTaxiDataToSqlDatabase(
             fare_amount=row["fare_amount"],
             total_amount=row["total_amount"],
             fees_id=str(fees_id),
-            rate_code_id=str(int(row["RatecodeID"])),
+            rate_code_id=str(int(row["rate_code_id"])),
         )
         InsertRecordIntoDatabase(
             models.Trip,
             database,
-            distance=row["trip_distance"],
+            distance=row["distance"],
             passenger_count=row["passenger_count"],
             pickup_id=str(pickup_id),
             dropoff_id=str(dropoff_id),
             payment_id=str(payment_id),
-            vendor_id=str(int(row["VendorID"])),
+            vendor_id=str(int(row["vendor_id"])),
         )
         percentage = CalcPercentage(int(str(row_id)) + 1, total_rows)
         if percentage % 10 == 0:
@@ -124,8 +127,8 @@ def CreateNycTaxiRedisSchema(
         TextField("$.tpep_pickup_datetime", as_name="pickup_time"),
         TextField("$.tpep_dropoff_datetime", as_name="dropoff_time"),
         NumericField("$.passenger_count", as_name="passenger_count"),
-        NumericField("$.trip_distance", as_name="trip_distance"),
-        NumericField("$.RatecodeID", as_name="RatecodeID"),
+        NumericField("$.distance", as_name="distance"),
+        NumericField("$.rate_code_id", as_name="rate_code_id"),
         TagField("$.fare_rate", as_name="fare_rate"),
         NumericField("$.PULocationID", as_name="PULocationID"),
         NumericField("$.DOLocationID", as_name="DOLocationID"),
@@ -140,7 +143,7 @@ def CreateNycTaxiRedisSchema(
         ),
         NumericField("$.total_amount", as_name="total_amount"),
         NumericField("$.congestion_surcharge", as_name="congestion_surcharge"),
-        NumericField("$.Airport_fee", as_name="Airport_fee"),
+        NumericField("$.airport_fee", as_name="airport_fee"),
         NumericField("$.cbd_congestion_fee", as_name="cbd_congestion_fee"),
     ]
     database.GetDatabaseEngine().ft(index_name).create_index(
@@ -163,9 +166,9 @@ def LoadNycTaxiDataToRedisDatabase(
     for row_id, row in taxi_data.iterrows():
         record_dict = row.to_dict()
         record_dict["fare_rate"] = MapRateCodeIdToName(
-            record_dict["RatecodeID"]
+            record_dict["rate_code_id"]
         )
-        record_dict["vendor_name"] = MapVendorIdToName(record_dict["VendorID"])
+        record_dict["vendor_name"] = MapVendorIdToName(record_dict["vendor_id"])
         record_dict["tpep_pickup_datetime"] = str(
             record_dict["tpep_pickup_datetime"].to_pydatetime()
         )
@@ -173,7 +176,7 @@ def LoadNycTaxiDataToRedisDatabase(
             record_dict["tpep_dropoff_datetime"].to_pydatetime()
         )
         record_dict.pop("store_and_fwd_flag")
-        record_dict.pop("VendorID")
+        record_dict.pop("vendor_id")
 
         redis_handler.create(f"trip:{str(row_id)}", record_dict)
 

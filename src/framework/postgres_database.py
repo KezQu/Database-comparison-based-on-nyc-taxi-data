@@ -44,18 +44,33 @@ class PostgresDatabase(AbstractDatabase):
     @classmethod
     def FlushDatabase(cls) -> None:
         orm_engine = cls.GetDatabaseEngine()
+        table_names = ", ".join(
+            table.name for table in BaseOrmType.metadata.sorted_tables
+        )
+        truncate_stmt = (
+            f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE;"
+        )
+        logging.debug(f"Flushing database with: {truncate_stmt}")
         with Session(orm_engine) as session:
             with session.begin():
-                session.execute(
-                    text(
-                        "TRUNCATE TABLE {} RESTART IDENTITY CASCADE;".format(
-                            ", ".join(
-                                table.name
-                                for table in BaseOrmType.metadata.sorted_tables
-                            )
-                        )
+                session.execute(text(truncate_stmt))
+                for table in BaseOrmType.metadata.sorted_tables:
+                    pk_col = next(
+                        (col for col in table.columns if col.primary_key), None
                     )
-                )
+                    if pk_col is not None and pk_col.autoincrement:
+                        seq_name = f"{table.name}_{pk_col.name}_seq"
+                        try:
+                            seq_val = session.execute(
+                                text(f"SELECT last_value FROM {seq_name};")
+                            ).scalar()
+                            logging.debug(
+                                f"Sequence {seq_name} last_value after flush: {seq_val}"
+                            )
+                        except Exception as e:
+                            logging.debug(
+                                f"Could not fetch sequence {seq_name}: {e}"
+                            )
 
     @classmethod
     def Reset(cls) -> None:

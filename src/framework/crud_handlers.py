@@ -87,18 +87,18 @@ class OrmCRUDHandler(AbstractCRUDHandler):
     def create(
         self,
         orm_type: typing.Type[ORM_TABLE_TYPE],
-        **orm_fields: str,
-    ) -> int:
+        *orm_entries: dict[str, typing.Any],
+    ) -> list[int]:
         with self._establish_session() as session:
-            result = session.execute(insert(orm_type).values(**orm_fields))
-        logging.debug(
-            f"Created ORM {orm_type.__name__} with ID: {result.inserted_primary_key[0]} : {orm_fields}"  # type: ignore
-        )
-        return result.inserted_primary_key[0]  # type: ignore
-
-    def bulk_create(self, orm_entries: list[BaseOrmType]) -> None:
-        with self._establish_session() as session:
-            session.bulk_save_objects(orm_entries)
+            logging.debug(
+                f"Creating {len(orm_entries)} entries of type {orm_type.__name__}."
+            )
+            query_result = session.execute(
+                insert(orm_type).returning(orm_type.id), orm_entries
+            )
+            inserted_ids = [row[0] for row in query_result]
+        logging.debug(f"Inserted records with ids: {inserted_ids}")
+        return inserted_ids
 
     def read(
         self, query: TypedReturnsRows[typing.Tuple[ORM_TABLE_TYPE]]
