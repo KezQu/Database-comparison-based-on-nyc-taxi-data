@@ -13,6 +13,7 @@ def main():
     parser.add_argument(
         "--database",
         type=lambda db_type: DatabaseType[db_type.upper()],
+        choices=list(DatabaseType),
         required=True,
         help="Database type to run",
     )
