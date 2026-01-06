@@ -1,4 +1,5 @@
 import logging
+import time
 import typing
 from itertools import product
 
@@ -13,9 +14,10 @@ from test_queries import (
     UPDATE_QUERIES_TEST_LIST,
 )
 
-from src.database_fixture_factory import DatabaseFixtureFactory
+from src.database_fixture_factory import DatabaseFixtureFactory, DatabaseType
 from src.framework.crud_handlers import (
     AbstractCRUDHandler,
+    MongoCRUDHandler,
     OrmCRUDHandler,
     RedisCRUDHandler,
 )
@@ -24,6 +26,12 @@ from src.framework.crud_handlers import (
 @pytest.fixture
 def SetupDatabaseContainer() -> typing.Generator[None, None, None]:
     DatabaseFixtureFactory.SetupDatabase()
+    database_type = DatabaseFixtureFactory.GetDatabaseType()
+    if database_type == DatabaseType.MSSQL:
+        logging.info("MSSQL needs couple seconds to start up.")
+        time.sleep(10)
+    DatabaseFixtureFactory.GetDatabaseHandle().GetDatabaseEngine()
+    DatabaseFixtureFactory.GetDatabaseHandle().Reset()
     yield
     DatabaseFixtureFactory.TeardownDatabase()
 
@@ -50,12 +58,14 @@ def LoadRecordsToDatabase(
 
 
 def GetCRUDHandler() -> AbstractCRUDHandler:
+    database_handle = DatabaseFixtureFactory.GetDatabaseHandle()
     return DatabaseFixtureFactory.ChooseBasedOnDatabaseType(
-        RedisCRUDHandler(
-            DatabaseFixtureFactory.GetDatabaseHandle().GetDatabaseEngine()
-        ),
-        OrmCRUDHandler(
-            DatabaseFixtureFactory.GetDatabaseHandle().GetDatabaseEngine()
+        redis_option=RedisCRUDHandler(database_handle.GetDatabaseEngine()),
+        postgres_option=OrmCRUDHandler(database_handle.GetDatabaseEngine()),
+        mssql_option=OrmCRUDHandler(database_handle.GetDatabaseEngine()),
+        mongo_option=MongoCRUDHandler(
+            database_handle.GetDatabaseEngine(),
+            "nyc_taxi"
         ),
     )
 

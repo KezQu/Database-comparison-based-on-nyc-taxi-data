@@ -11,6 +11,7 @@ from sqlalchemy import Delete, Engine, Result, Update, insert
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.selectable import TypedReturnsRows
 
+from pymongo import MongoClient
 from redis import Redis
 
 from .models import BaseOrmType
@@ -72,6 +73,57 @@ class RedisCRUDHandler(AbstractCRUDHandler):
         for entry_id in query_results.keys():
             self.db_engine.json().delete(entry_id)
         logging.info(f"Deleted {len(query_results)} entries.")
+
+
+class MongoCRUDHandler(AbstractCRUDHandler):
+    def __init__(self, db_engine: MongoClient, database_name: str):
+        self.db_engine = db_engine
+        self.database_name = database_name
+
+    def create(self, collection_name: str, entry: dict[str, typing.Any]) -> None:
+        self.db_engine[self.database_name][collection_name].insert_one(entry)
+
+    def read(
+        self, collection_query: tuple[str, dict[str, typing.Any]]
+    ) -> list[dict[str, typing.Any]]:
+        collection_name, query = collection_query
+        logging.debug(f"Executing Mongo query on {collection_name}: {query}")
+        found_entries = list(
+            self.db_engine[self.database_name][collection_name].find(query)
+        )
+        for entry in found_entries:
+            entry["_id"] = str(entry["_id"])
+        logging.info(f"Found {len(found_entries)} entries matching the query.")
+        logging.debug(f"Mongo read query result: {found_entries}")
+        return found_entries
+
+    def update(
+        self,
+        collection_query: tuple[str, dict[str, typing.Any]],
+        values: dict[str, typing.Any],
+    ) -> int:
+        collection_name, query = collection_query
+        logging.debug(
+            f"Executing Mongo update on {collection_name} query: {query} with values {values}."
+        )
+        update_result = self.db_engine[self.database_name][
+            collection_name
+        ].update_many(query, {"$set": values})
+        logging.info(f"Updated {update_result.modified_count} entries.")
+        return update_result.modified_count
+
+    def delete(
+        self, collection_query: tuple[str, dict[str, typing.Any]]
+    ) -> int:
+        collection_name, query = collection_query
+        logging.debug(f"Executing Mongo delete on {collection_name} query: {query}.")
+        delete_result = self.db_engine[self.database_name][
+            collection_name
+        ].delete_many(query)
+        if not delete_result.deleted_count:
+            logging.warning("No matching records found to delete.")
+        logging.info(f"Deleted {delete_result.deleted_count} entries.")
+        return delete_result.deleted_count
 
 
 class OrmCRUDHandler(AbstractCRUDHandler):

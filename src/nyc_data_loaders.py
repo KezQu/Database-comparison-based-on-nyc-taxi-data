@@ -7,7 +7,8 @@ from redis.commands.search.index_definition import IndexDefinition, IndexType
 
 from .framework import models
 from .framework.abstract_database import AbstractDatabase
-from .framework.crud_handlers import OrmCRUDHandler, RedisCRUDHandler
+from .framework.crud_handlers import MongoCRUDHandler, OrmCRUDHandler, RedisCRUDHandler
+from .framework.mongo_database import MongoDatabase
 
 ORM_TABLE_TYPE = typing.TypeVar("ORM_TABLE_TYPE", bound=models.BaseOrmType)
 
@@ -238,3 +239,30 @@ def LoadNycTaxiDataToRedisDatabase(
         record_dict.pop("vendor_id")
 
         redis_handler.create(f"trip:{str(row_id)}", record_dict)
+
+
+def LoadNycTaxiDataToMongoDatabase(
+    database: AbstractDatabase, taxi_data: pd.DataFrame
+) -> None:
+    if not isinstance(database, MongoDatabase):
+        raise ValueError("Expected MongoDatabase instance")
+
+    mongo_handler = MongoCRUDHandler(
+        database.GetDatabaseEngine(), database.GetDatabaseName()
+    )
+    for row_id, row in taxi_data.iterrows():
+        record_dict = row.to_dict()
+        record_dict["fare_rate"] = MapRateCodeIdToName(
+            record_dict["rate_code_id"]
+        )
+        record_dict["vendor_name"] = MapVendorIdToName(record_dict["vendor_id"])
+        record_dict["tpep_pickup_datetime"] = (
+            record_dict["tpep_pickup_datetime"].to_pydatetime()
+        )
+        record_dict["tpep_dropoff_datetime"] = (
+            record_dict["tpep_dropoff_datetime"].to_pydatetime()
+        )
+        record_dict.pop("store_and_fwd_flag")
+        record_dict.pop("vendor_id")
+
+        mongo_handler.create("trips", record_dict)

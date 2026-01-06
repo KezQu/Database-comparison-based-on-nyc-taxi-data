@@ -7,9 +7,12 @@ import typing
 import pandas as pd
 
 from .framework.abstract_database import AbstractDatabase
+from .framework.mongo_database import MongoDatabase
+from .framework.mssql_database import MssqlDatabase
 from .framework.postgres_database import PostgresDatabase
 from .framework.redis_database import RedisDatabase
 from .nyc_data_loaders import (
+    LoadNycTaxiDataToMongoDatabase,
     LoadNycTaxiDataToRedisDatabase,
     LoadNycTaxiDataToSqlDatabase,
 )
@@ -18,6 +21,8 @@ from .nyc_data_loaders import (
 class DatabaseType(enum.StrEnum):
     POSTGRES = enum.auto()
     REDIS = enum.auto()
+    MSSQL = enum.auto()
+    MONGO = enum.auto()
     UNKNOWN = enum.auto()
 
 
@@ -67,6 +72,8 @@ class DatabaseFixtureFactory:
             ],
             check=True,
         )
+        import time
+        time.sleep(2)
         cls.GetDatabaseHandle().Reset()
 
     @classmethod
@@ -74,12 +81,18 @@ class DatabaseFixtureFactory:
         cls,
         redis_option: typing.Any,
         postgres_option: typing.Any,
+        mssql_option: typing.Any,
+        mongo_option: typing.Any,
     ) -> typing.Any:
         match cls.database_type:
             case DatabaseType.POSTGRES:
                 return postgres_option
             case DatabaseType.REDIS:
                 return redis_option
+            case DatabaseType.MSSQL:
+                return mssql_option
+            case DatabaseType.MONGO:
+                return mongo_option
             case _:
                 raise ValueError(
                     f"Unsupported database type: {cls.database_type}"
@@ -90,6 +103,8 @@ class DatabaseFixtureFactory:
         return cls.ChooseBasedOnDatabaseType(
             redis_option=RedisDatabase(),
             postgres_option=PostgresDatabase(),
+            mssql_option=MssqlDatabase(),
+            mongo_option=MongoDatabase(),
         )
 
     @classmethod
@@ -99,4 +114,6 @@ class DatabaseFixtureFactory:
         return cls.ChooseBasedOnDatabaseType(
             redis_option=LoadNycTaxiDataToRedisDatabase,
             postgres_option=LoadNycTaxiDataToSqlDatabase,
+            mssql_option=LoadNycTaxiDataToSqlDatabase,
+            mongo_option=LoadNycTaxiDataToMongoDatabase,
         )
